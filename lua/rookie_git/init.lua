@@ -5,6 +5,7 @@ local modules = {
     "rookie_git.setup_diffview",
     "rookie_git.setup_gitgraph",
     "rookie_git.setup_gitsigns",
+    "rookie_git.abbr",
 }
 
 local function try_setup(modname)
