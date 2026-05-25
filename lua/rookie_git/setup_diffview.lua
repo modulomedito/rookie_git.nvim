@@ -8,10 +8,28 @@ function M.setup()
         return
     end
 
+    local actions = require("diffview.actions")
+
     -- Setup diffview with default options if needed
     diffview.setup({
         keymaps = {
             disable_defaults = true,
+            view = {
+                { "n", "q", actions.close, { desc = "Close Diffview" } },
+                { "n", "<tab>", actions.select_next_entry, { desc = "Next entry" } },
+                { "n", "<s-tab>", actions.select_prev_entry, { desc = "Previous entry" } },
+            },
+            file_panel = {
+                { "n", "<CR>", actions.select_entry, { desc = "Open the diff for the selected entry" } },
+                { "n", "o", actions.select_entry, { desc = "Open the diff for the selected entry" } },
+                { "n", "s", actions.toggle_stage_entry, { desc = "Stage / unstage the selected entry" } },
+                { "n", "q", actions.close, { desc = "Close Diffview" } },
+            },
+            file_history_panel = {
+                { "n", "<CR>", actions.select_entry, { desc = "Open the diff for the selected entry" } },
+                { "n", "o", actions.select_entry, { desc = "Open the diff for the selected entry" } },
+                { "n", "q", actions.close, { desc = "Close Diffview" } },
+            },
         },
     })
 
