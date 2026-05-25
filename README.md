@@ -34,10 +34,8 @@ require("lazy").setup({
       "sindrets/diffview.nvim",
       "lewis6991/gitsigns.nvim",
       "isakbm/gitgraph.nvim",
+      "tpope/vim-fugitive",
     },
-    -- Lazy-load on commands and keys the plugin uses
-    cmd = { "RkGitGraph", "RkGit", "Gg" },
-    keys = { "<leader>diff", "<leader><leader>diff", "<leader>jd" },
     config = function()
       require("rookie_git").setup()
     end,
