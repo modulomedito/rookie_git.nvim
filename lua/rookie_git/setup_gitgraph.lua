@@ -252,12 +252,14 @@ function M.setup()
         group = vim.api.nvim_create_augroup("RkGitTabName", { clear = true }),
         pattern = "*",
         callback = function()
-            local ft = vim.bo.filetype
-            if ft == "fugitive" then
-                pcall(vim.api.nvim_buf_set_name, 0, "Fugitive")
-            elseif ft == "gitgraph" then
-                pcall(vim.api.nvim_buf_set_name, 0, "GitGraph")
-            end
+            vim.schedule(function()
+                local ft = vim.bo.filetype
+                if ft == "fugitive" then
+                    pcall(vim.api.nvim_buf_set_name, 0, "Fugitive")
+                elseif ft == "gitgraph" then
+                    pcall(vim.api.nvim_buf_set_name, 0, "GitGraph")
+                end
+            end)
         end,
     })
 end
