@@ -78,6 +78,10 @@ function M.draw_gitgraph()
     -- Save the window that is CURRENTLY focused in this tab and its cursor position
     local original_win = vim.api.nvim_get_current_win()
     local original_cursor = vim.api.nvim_win_get_cursor(original_win)
+    local original_buf = vim.api.nvim_win_get_buf(original_win)
+    local is_fresh_tab = vim.bo[original_buf].buftype == ""
+        and vim.api.nvim_buf_get_name(original_buf) == ""
+        and #vim.api.nvim_tabpage_list_wins(0) == 1
 
     -- 1. Find existing windows and buffers in the CURRENT tab
     local current_tab = vim.api.nvim_get_current_tabpage()
@@ -113,7 +117,11 @@ function M.draw_gitgraph()
     else
         if fugitive_buf ~= -1 then
             -- Buffer exists but no window in this tab
-            vim.cmd("buffer " .. fugitive_buf)
+            if is_fresh_tab then
+                vim.api.nvim_win_set_buf(original_win, fugitive_buf)
+            else
+                vim.cmd("buffer " .. fugitive_buf)
+            end
             fugitive_win = vim.api.nvim_get_current_win()
         else
             -- Use G to open fugitive
@@ -122,7 +130,23 @@ function M.draw_gitgraph()
                 vim.notify("Fugitive failed: " .. tostring(err), vim.log.levels.ERROR)
                 return
             end
-            fugitive_win = vim.api.nvim_get_current_win()
+
+            -- Find the newly opened fugitive window
+            for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+                local buf = vim.api.nvim_win_get_buf(win)
+                if vim.bo[buf].filetype == "fugitive" then
+                    fugitive_win = win
+                    break
+                end
+            end
+
+            -- If G opened in a split and we had a fresh tab, close the empty buffer
+            if is_fresh_tab and fugitive_win ~= -1 and fugitive_win ~= original_win then
+                pcall(vim.api.nvim_win_close, original_win, false)
+                -- Update original_win to fugitive_win so focus restoration works
+                original_win = fugitive_win
+                original_cursor = { 1, 0 }
+            end
         end
     end
 
