@@ -246,6 +246,20 @@ function M.setup()
         end
         M.async_git(opts.fargs)
     end, { nargs = "*", complete = "shellcmd" })
+
+    -- Auto rename tab based on focused buffer
+    vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter" }, {
+        group = vim.api.nvim_create_augroup("RkGitTabName", { clear = true }),
+        pattern = "*",
+        callback = function()
+            local ft = vim.bo.filetype
+            if ft == "fugitive" then
+                pcall(vim.api.nvim_command, "LualineRenameTab Fugitive")
+            elseif ft == "gitgraph" then
+                pcall(vim.api.nvim_command, "LualineRenameTab GitGraph")
+            end
+        end,
+    })
 end
 
 return M
