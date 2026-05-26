@@ -1,6 +1,31 @@
 local M = {}
 
 function M.open_gitgraph()
+    -- 1. Check if a tab with gitgraph/fugitive already exists
+    local target_tab = -1
+    for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+        local wins = vim.api.nvim_tabpage_list_wins(tab)
+        for _, win in ipairs(wins) do
+            local buf = vim.api.nvim_win_get_buf(win)
+            local ft = vim.bo[buf].filetype
+            if ft == "gitgraph" or ft == "fugitive" then
+                target_tab = tab
+                break
+            end
+        end
+        if target_tab ~= -1 then
+            break
+        end
+    end
+
+    -- 2. Switch to existing tab or create a new one
+    if target_tab ~= -1 then
+        vim.api.nvim_set_current_tabpage(target_tab)
+    else
+        vim.cmd("tabnew")
+    end
+
+    -- 3. Proceed with drawing
     local timed_out = false
     vim.notify("Git fetching...", vim.log.levels.INFO)
     local job_id = vim.fn.jobstart({ "git", "fetch" }, {
@@ -44,24 +69,23 @@ function M.async_git(args, success_msg)
 end
 
 function M.draw_gitgraph()
-    -- 1. Ensure we are not in NvimTree
-    if vim.bo.filetype == "NvimTree" then
-        vim.cmd("wincmd l") -- Try to move right
-        if vim.bo.filetype == "NvimTree" then
-            -- Still in NvimTree? Try to find any other window
-            for _, win in ipairs(vim.api.nvim_list_wins()) do
-                local buf = vim.api.nvim_win_get_buf(win)
-                if vim.bo[buf].filetype ~= "NvimTree" then
-                    vim.api.nvim_set_current_win(win)
-                    break
-                end
-            end
+    -- 1. Find existing windows and buffers in the CURRENT tab
+    local current_tab = vim.api.nvim_get_current_tabpage()
+    local wins = vim.api.nvim_tabpage_list_wins(current_tab)
+
+    local fugitive_win = -1
+    local gitgraph_win = -1
+    for _, win in ipairs(wins) do
+        local buf = vim.api.nvim_win_get_buf(win)
+        local ft = vim.bo[buf].filetype
+        if ft == "fugitive" then
+            fugitive_win = win
+        elseif ft == "gitgraph" then
+            gitgraph_win = win
         end
     end
 
-    local main_win = vim.api.nvim_get_current_win()
-
-    -- Find existing windows and buffers
+    -- Find buffers globally to reuse them if they exist
     local fugitive_buf = -1
     local gitgraph_buf = -1
     for _, buf in ipairs(vim.api.nvim_list_bufs()) do
@@ -73,50 +97,23 @@ function M.draw_gitgraph()
         end
     end
 
-    local fugitive_win = -1
-    local gitgraph_win = -1
-    for _, win in ipairs(vim.api.nvim_list_wins()) do
-        local buf = vim.api.nvim_win_get_buf(win)
-        local ft = vim.bo[buf].filetype
-        if ft == "fugitive" then
-            fugitive_win = win
-        elseif ft == "gitgraph" then
-            gitgraph_win = win
-        end
-    end
-
     -- 2. Open/Focus Fugitive
     if fugitive_win ~= -1 then
         vim.api.nvim_set_current_win(fugitive_win)
     else
-        vim.api.nvim_set_current_win(main_win)
         if fugitive_buf ~= -1 then
-            vim.cmd("rightbelow split")
-            vim.api.nvim_set_current_buf(fugitive_buf)
+            -- Buffer exists but no window in this tab
+            vim.cmd("buffer " .. fugitive_buf)
+            fugitive_win = vim.api.nvim_get_current_win()
         else
-            -- Use rightbelow G to try and force the split location
-            local ok, err = pcall(vim.cmd, "rightbelow G")
+            -- Use G to open fugitive
+            local ok, err = pcall(vim.cmd, "G")
             if not ok then
-                vim.notify(
-                    "Fugitive failed: " .. tostring(err),
-                    vim.log.levels.ERROR
-                )
+                vim.notify("Fugitive failed: " .. tostring(err), vim.log.levels.ERROR)
                 return
             end
+            fugitive_win = vim.api.nvim_get_current_win()
         end
-
-        -- Re-locate fugitive window
-        for _, win in ipairs(vim.api.nvim_list_wins()) do
-            local buf = vim.api.nvim_win_get_buf(win)
-            if vim.bo[buf].filetype == "fugitive" then
-                fugitive_win = win
-                break
-            end
-        end
-    end
-
-    if fugitive_win == -1 then
-        return
     end
 
     -- Refresh fugitive
