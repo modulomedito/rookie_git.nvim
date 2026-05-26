@@ -1,22 +1,22 @@
 local M = {}
 
-function M.open_gitgraph()
-    -- 1. Check if a tab with gitgraph/fugitive already exists
-    local target_tab = -1
+function M.find_git_tab()
     for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
         local wins = vim.api.nvim_tabpage_list_wins(tab)
         for _, win in ipairs(wins) do
             local buf = vim.api.nvim_win_get_buf(win)
             local ft = vim.bo[buf].filetype
             if ft == "gitgraph" or ft == "fugitive" then
-                target_tab = tab
-                break
+                return tab
             end
         end
-        if target_tab ~= -1 then
-            break
-        end
     end
+    return -1
+end
+
+function M.open_gitgraph()
+    -- 1. Check if a tab with gitgraph/fugitive already exists
+    local target_tab = M.find_git_tab()
 
     -- 2. Switch to existing tab or create a new one
     if target_tab ~= -1 then
@@ -69,6 +69,15 @@ function M.async_git(args, success_msg)
 end
 
 function M.draw_gitgraph()
+    -- 0. Ensure we are in the Git tab
+    local target_tab = M.find_git_tab()
+    if target_tab ~= -1 then
+        vim.api.nvim_set_current_tabpage(target_tab)
+    end
+
+    -- Save the window that is CURRENTLY focused in this tab
+    local original_win = vim.api.nvim_get_current_win()
+
     -- 1. Find existing windows and buffers in the CURRENT tab
     local current_tab = vim.api.nvim_get_current_tabpage()
     local wins = vim.api.nvim_tabpage_list_wins(current_tab)
@@ -136,6 +145,11 @@ function M.draw_gitgraph()
     -- 4. Draw
     vim.api.nvim_set_current_win(gitgraph_win)
     require("gitgraph").draw({}, { all = true, max_count = 5000 })
+
+    -- 5. Restore original window focus
+    if original_win and vim.api.nvim_win_is_valid(original_win) then
+        vim.api.nvim_set_current_win(original_win)
+    end
 end
 
 function M.setup()
