@@ -20,6 +20,27 @@ local function is_empty_placeholder_buffer(buf)
         and vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] == ""
 end
 
+local function refresh_fugitive_status(win)
+    if win == -1 or not vim.api.nvim_win_is_valid(win) then
+        return
+    end
+
+    vim.api.nvim_win_call(win, function()
+        if vim.bo.filetype ~= "fugitive" then
+            return
+        end
+
+        local ok = false
+        if vim.fn.exists("*fugitive#ReloadStatus") == 1 then
+            ok = pcall(vim.fn["fugitive#ReloadStatus"])
+        end
+
+        if not ok then
+            pcall(vim.cmd, "silent edit")
+        end
+    end)
+end
+
 function M.find_git_tab()
     for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
         local wins = vim.api.nvim_tabpage_list_wins(tab)
@@ -238,6 +259,8 @@ function M.draw_gitgraph()
         vim.api.nvim_set_current_win(fugitive_win)
         vim.cmd("wincmd H")
     end
+
+    refresh_fugitive_status(fugitive_win)
 
     -- 3. Open/Focus GitGraph
     if gitgraph_win ~= -1 then
