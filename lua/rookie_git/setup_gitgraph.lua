@@ -102,18 +102,33 @@ function M.draw_gitgraph()
     -- Find buffers globally to reuse them if they exist
     local fugitive_buf = -1
     local gitgraph_buf = -1
-    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-        local ft = vim.bo[buf].filetype
-        if ft == "fugitive" then
-            fugitive_buf = buf
-        elseif ft == "gitgraph" then
-            gitgraph_buf = buf
+    local bufs = vim.api.nvim_list_bufs()
+    for _, buf in ipairs(bufs) do
+        if vim.api.nvim_buf_is_valid(buf) then
+            local ft = vim.bo[buf].filetype
+            if ft == "fugitive" then
+                if fugitive_buf == -1 then
+                    fugitive_buf = buf
+                else
+                    -- Close extra fugitive buffers
+                    pcall(vim.api.nvim_buf_delete, buf, { force = true })
+                end
+            elseif ft == "gitgraph" then
+                if gitgraph_buf == -1 then
+                    gitgraph_buf = buf
+                else
+                    -- Close extra gitgraph buffers
+                    pcall(vim.api.nvim_buf_delete, buf, { force = true })
+                end
+            end
         end
     end
 
     -- 2. Open/Focus Fugitive
     if fugitive_win ~= -1 then
         vim.api.nvim_set_current_win(fugitive_win)
+        -- Ensure fugitive is on the left
+        vim.cmd("wincmd H")
     else
         if fugitive_buf ~= -1 then
             -- Buffer exists but no window in this tab
@@ -148,6 +163,9 @@ function M.draw_gitgraph()
                 original_cursor = { 1, 0 }
             end
         end
+        -- Ensure fugitive is on the left
+        vim.api.nvim_set_current_win(fugitive_win)
+        vim.cmd("wincmd H")
     end
 
     -- Refresh fugitive
@@ -158,6 +176,8 @@ function M.draw_gitgraph()
     -- 3. Open/Focus GitGraph
     if gitgraph_win ~= -1 then
         vim.api.nvim_set_current_win(gitgraph_win)
+        -- Ensure gitgraph is on the right
+        vim.cmd("wincmd L")
     else
         vim.api.nvim_set_current_win(fugitive_win)
         vim.cmd("rightbelow vsplit")
@@ -165,6 +185,9 @@ function M.draw_gitgraph()
         if gitgraph_buf ~= -1 then
             vim.api.nvim_set_current_buf(gitgraph_buf)
         end
+        -- Ensure gitgraph is on the right
+        vim.api.nvim_set_current_win(gitgraph_win)
+        vim.cmd("wincmd L")
     end
 
     -- 4. Draw
