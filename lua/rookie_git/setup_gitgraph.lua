@@ -1,5 +1,17 @@
 local M = {}
 
+local function is_fugitive_buffer(buf)
+    local ft = vim.bo[buf].filetype
+    local name = vim.api.nvim_buf_get_name(buf)
+    return ft == "fugitive" or name:match("^fugitive://") or name:match("Fugitive$")
+end
+
+local function is_gitgraph_buffer(buf)
+    local ft = vim.bo[buf].filetype
+    local name = vim.api.nvim_buf_get_name(buf)
+    return ft == "gitgraph" or name:match("GitGraph$")
+end
+
 function M.find_git_tab()
     for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
         local wins = vim.api.nvim_tabpage_list_wins(tab)
@@ -20,15 +32,13 @@ function M.open_gitgraph()
     local gitgraph_buf = -1
     for _, buf in ipairs(vim.api.nvim_list_bufs()) do
         if vim.api.nvim_buf_is_valid(buf) then
-            local ft = vim.bo[buf].filetype
-            local name = vim.api.nvim_buf_get_name(buf)
-            if ft == "fugitive" or name:match("^fugitive://") or name:match("Fugitive$") then
+            if is_fugitive_buffer(buf) then
                 if fugitive_buf == -1 then
                     fugitive_buf = buf
                 else
                     pcall(vim.api.nvim_buf_delete, buf, { force = true })
                 end
-            elseif ft == "gitgraph" or name:match("GitGraph$") then
+            elseif is_gitgraph_buffer(buf) then
                 if gitgraph_buf == -1 then
                     gitgraph_buf = buf
                 else
@@ -53,12 +63,14 @@ function M.open_gitgraph()
     vim.notify("Git fetching...", vim.log.levels.INFO)
     local job_id = vim.fn.jobstart({ "git", "fetch" }, {
         on_exit = function(_, exit_code)
-            if exit_code == 0 then
-                vim.notify("Git fetch completed", vim.log.levels.INFO)
-            elseif not timed_out then
-                vim.notify("Git fetch failed", vim.log.levels.WARN)
-            end
-            M.draw_gitgraph()
+            vim.schedule(function()
+                if exit_code == 0 then
+                    vim.notify("Git fetch completed", vim.log.levels.INFO)
+                elseif not timed_out then
+                    vim.notify("Git fetch failed", vim.log.levels.WARN)
+                end
+                M.draw_gitgraph()
+            end)
         end,
     })
 
@@ -77,16 +89,18 @@ function M.async_git(args, success_msg)
     vim.notify("Git " .. cmd_str .. "...", vim.log.levels.INFO)
     vim.fn.jobstart(vim.list_extend({ "git" }, args), {
         on_exit = function(_, exit_code)
-            if exit_code == 0 then
-                if success_msg then
-                    vim.notify(success_msg, vim.log.levels.INFO)
+            vim.schedule(function()
+                if exit_code == 0 then
+                    if success_msg then
+                        vim.notify(success_msg, vim.log.levels.INFO)
+                    else
+                        vim.notify("Git " .. cmd_str .. " completed", vim.log.levels.INFO)
+                    end
+                    M.draw_gitgraph()
                 else
-                    vim.notify("Git " .. cmd_str .. " completed", vim.log.levels.INFO)
+                    vim.notify("Git " .. cmd_str .. " failed", vim.log.levels.WARN)
                 end
-                M.draw_gitgraph()
-            else
-                vim.notify("Git " .. cmd_str .. " failed", vim.log.levels.WARN)
-            end
+            end)
         end,
     })
 end
@@ -112,13 +126,39 @@ function M.draw_gitgraph()
 
     local fugitive_win = -1
     local gitgraph_win = -1
+    local extra_fugitive_wins = {}
+    local extra_gitgraph_wins = {}
     for _, win in ipairs(wins) do
         local buf = vim.api.nvim_win_get_buf(win)
-        local ft = vim.bo[buf].filetype
-        if ft == "fugitive" then
-            fugitive_win = win
-        elseif ft == "gitgraph" then
-            gitgraph_win = win
+        if is_fugitive_buffer(buf) then
+            if fugitive_win == -1 then
+                fugitive_win = win
+            else
+                table.insert(extra_fugitive_wins, win)
+            end
+        elseif is_gitgraph_buffer(buf) then
+            if gitgraph_win == -1 then
+                gitgraph_win = win
+            else
+                table.insert(extra_gitgraph_wins, win)
+            end
+        end
+    end
+
+    if vim.tbl_contains(extra_fugitive_wins, original_win) then
+        original_win = fugitive_win
+    elseif vim.tbl_contains(extra_gitgraph_wins, original_win) then
+        original_win = gitgraph_win
+    end
+
+    for _, win in ipairs(extra_fugitive_wins) do
+        if vim.api.nvim_win_is_valid(win) then
+            pcall(vim.api.nvim_win_close, win, false)
+        end
+    end
+    for _, win in ipairs(extra_gitgraph_wins) do
+        if vim.api.nvim_win_is_valid(win) then
+            pcall(vim.api.nvim_win_close, win, false)
         end
     end
 
@@ -128,16 +168,14 @@ function M.draw_gitgraph()
     local bufs = vim.api.nvim_list_bufs()
     for _, buf in ipairs(bufs) do
         if vim.api.nvim_buf_is_valid(buf) then
-            local ft = vim.bo[buf].filetype
-            local name = vim.api.nvim_buf_get_name(buf)
-            if ft == "fugitive" or name:match("^fugitive://") or name:match("Fugitive$") then
+            if is_fugitive_buffer(buf) then
                 if fugitive_buf == -1 then
                     fugitive_buf = buf
                 else
                     -- Close extra fugitive buffers
                     pcall(vim.api.nvim_buf_delete, buf, { force = true })
                 end
-            elseif ft == "gitgraph" or name:match("GitGraph$") then
+            elseif is_gitgraph_buffer(buf) then
                 if gitgraph_buf == -1 then
                     gitgraph_buf = buf
                 else
@@ -157,11 +195,12 @@ function M.draw_gitgraph()
         if fugitive_buf ~= -1 then
             -- Buffer exists but no window in this tab
             if is_fresh_tab then
-                vim.api.nvim_win_set_buf(original_win, fugitive_buf)
+                fugitive_win = original_win
             else
-                vim.cmd("buffer " .. fugitive_buf)
+                vim.cmd("leftabove vsplit")
+                fugitive_win = vim.api.nvim_get_current_win()
             end
-            fugitive_win = vim.api.nvim_get_current_win()
+            vim.api.nvim_win_set_buf(fugitive_win, fugitive_buf)
         else
             -- Use G to open fugitive
             local ok, err = pcall(vim.cmd, "G")
@@ -191,11 +230,6 @@ function M.draw_gitgraph()
         vim.api.nvim_set_current_win(fugitive_win)
         vim.cmd("wincmd H")
     end
-
-    -- Refresh fugitive
-    vim.api.nvim_win_call(fugitive_win, function()
-        pcall(vim.cmd, "G")
-    end)
 
     -- 3. Open/Focus GitGraph
     if gitgraph_win ~= -1 then
