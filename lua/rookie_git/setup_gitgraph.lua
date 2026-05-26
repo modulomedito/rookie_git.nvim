@@ -12,6 +12,14 @@ local function is_gitgraph_buffer(buf)
     return ft == "gitgraph" or name:match("GitGraph$")
 end
 
+local function is_empty_placeholder_buffer(buf)
+    return vim.bo[buf].buftype == ""
+        and vim.api.nvim_buf_get_name(buf) == ""
+        and not vim.bo[buf].modified
+        and vim.api.nvim_buf_line_count(buf) <= 1
+        and vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] == ""
+end
+
 function M.find_git_tab()
     for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
         local wins = vim.api.nvim_tabpage_list_wins(tab)
@@ -251,6 +259,28 @@ function M.draw_gitgraph()
     -- 4. Draw
     vim.api.nvim_set_current_win(gitgraph_win)
     require("gitgraph").draw({}, { all = true, max_count = 5000 })
+
+    -- Remove leftover placeholder windows so the Git tab stays |fugitive|gitgraph|.
+    local final_wins = vim.api.nvim_tabpage_list_wins(current_tab)
+    for _, win in ipairs(final_wins) do
+        local buf = vim.api.nvim_win_get_buf(win)
+        if not is_fugitive_buffer(buf) and not is_gitgraph_buffer(buf) and is_empty_placeholder_buffer(buf) then
+            if win == original_win then
+                original_win = fugitive_win
+                original_cursor = { 1, 0 }
+            end
+            pcall(vim.api.nvim_win_close, win, false)
+        end
+    end
+
+    if vim.api.nvim_win_is_valid(fugitive_win) then
+        vim.api.nvim_set_current_win(fugitive_win)
+        vim.cmd("wincmd H")
+    end
+    if vim.api.nvim_win_is_valid(gitgraph_win) then
+        vim.api.nvim_set_current_win(gitgraph_win)
+        vim.cmd("wincmd L")
+    end
 
     -- 5. Restore original window focus and cursor position
     if original_win and vim.api.nvim_win_is_valid(original_win) then
