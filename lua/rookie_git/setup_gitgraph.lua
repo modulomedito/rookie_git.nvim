@@ -254,9 +254,9 @@ function M.setup()
         callback = function()
             local ft = vim.bo.filetype
             if ft == "fugitive" then
-                pcall(vim.api.nvim_command, "LualineRenameTab Fugitive")
+                pcall(vim.api.nvim_buf_set_name, 0, "Fugitive")
             elseif ft == "gitgraph" then
-                pcall(vim.api.nvim_command, "LualineRenameTab GitGraph")
+                pcall(vim.api.nvim_buf_set_name, 0, "GitGraph")
             end
         end,
     })
