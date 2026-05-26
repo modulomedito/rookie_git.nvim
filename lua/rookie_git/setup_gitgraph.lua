@@ -75,8 +75,9 @@ function M.draw_gitgraph()
         vim.api.nvim_set_current_tabpage(target_tab)
     end
 
-    -- Save the window that is CURRENTLY focused in this tab
+    -- Save the window that is CURRENTLY focused in this tab and its cursor position
     local original_win = vim.api.nvim_get_current_win()
+    local original_cursor = vim.api.nvim_win_get_cursor(original_win)
 
     -- 1. Find existing windows and buffers in the CURRENT tab
     local current_tab = vim.api.nvim_get_current_tabpage()
@@ -146,9 +147,11 @@ function M.draw_gitgraph()
     vim.api.nvim_set_current_win(gitgraph_win)
     require("gitgraph").draw({}, { all = true, max_count = 5000 })
 
-    -- 5. Restore original window focus
+    -- 5. Restore original window focus and cursor position
     if original_win and vim.api.nvim_win_is_valid(original_win) then
         vim.api.nvim_set_current_win(original_win)
+        -- Only restore cursor if it's still within bounds (just in case the graph shrank)
+        pcall(vim.api.nvim_win_set_cursor, original_win, original_cursor)
     end
 end
 
