@@ -15,17 +15,40 @@ function M.find_git_tab()
 end
 
 function M.open_gitgraph()
-    -- 1. Check if a tab with gitgraph/fugitive already exists
+    -- 1. Cleanup redundant buffers first
+    local fugitive_buf = -1
+    local gitgraph_buf = -1
+    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+        if vim.api.nvim_buf_is_valid(buf) then
+            local ft = vim.bo[buf].filetype
+            local name = vim.api.nvim_buf_get_name(buf)
+            if ft == "fugitive" or name:match("^fugitive://") or name:match("Fugitive$") then
+                if fugitive_buf == -1 then
+                    fugitive_buf = buf
+                else
+                    pcall(vim.api.nvim_buf_delete, buf, { force = true })
+                end
+            elseif ft == "gitgraph" or name:match("GitGraph$") then
+                if gitgraph_buf == -1 then
+                    gitgraph_buf = buf
+                else
+                    pcall(vim.api.nvim_buf_delete, buf, { force = true })
+                end
+            end
+        end
+    end
+
+    -- 2. Check if a tab with gitgraph/fugitive already exists
     local target_tab = M.find_git_tab()
 
-    -- 2. Switch to existing tab or create a new one
+    -- 3. Switch to existing tab or create a new one
     if target_tab ~= -1 then
         vim.api.nvim_set_current_tabpage(target_tab)
     else
         vim.cmd("tabnew")
     end
 
-    -- 3. Proceed with drawing
+    -- 4. Proceed with drawing
     local timed_out = false
     vim.notify("Git fetching...", vim.log.levels.INFO)
     local job_id = vim.fn.jobstart({ "git", "fetch" }, {
@@ -106,14 +129,15 @@ function M.draw_gitgraph()
     for _, buf in ipairs(bufs) do
         if vim.api.nvim_buf_is_valid(buf) then
             local ft = vim.bo[buf].filetype
-            if ft == "fugitive" then
+            local name = vim.api.nvim_buf_get_name(buf)
+            if ft == "fugitive" or name:match("^fugitive://") or name:match("Fugitive$") then
                 if fugitive_buf == -1 then
                     fugitive_buf = buf
                 else
                     -- Close extra fugitive buffers
                     pcall(vim.api.nvim_buf_delete, buf, { force = true })
                 end
-            elseif ft == "gitgraph" then
+            elseif ft == "gitgraph" or name:match("GitGraph$") then
                 if gitgraph_buf == -1 then
                     gitgraph_buf = buf
                 else
@@ -276,10 +300,14 @@ function M.setup()
         pattern = "*",
         callback = function()
             vim.schedule(function()
+                if not vim.api.nvim_buf_is_valid(0) then
+                    return
+                end
                 local ft = vim.bo.filetype
-                if ft == "fugitive" then
+                local name = vim.api.nvim_buf_get_name(0)
+                if ft == "fugitive" and not name:match("Fugitive$") then
                     pcall(vim.api.nvim_buf_set_name, 0, "Fugitive")
-                elseif ft == "gitgraph" then
+                elseif ft == "gitgraph" and not name:match("GitGraph$") then
                     pcall(vim.api.nvim_buf_set_name, 0, "GitGraph")
                 end
             end)
