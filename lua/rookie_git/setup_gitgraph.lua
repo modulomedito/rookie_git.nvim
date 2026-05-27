@@ -44,35 +44,49 @@ end
 
 local function apply_gitgraph_hash_colors(buf)
     if not buf or not vim.api.nvim_buf_is_valid(buf) then
-        return
+        return false
     end
 
     local ok, gitgraph = pcall(require, "gitgraph")
     if not ok or type(gitgraph.graph) ~= "table" then
-        return
+        return false
     end
 
     vim.api.nvim_buf_clear_namespace(buf, gitgraph_hash_ns, 0, -1)
 
     local branch_color_count = 5
+    local applied = false
     for row_idx, row in ipairs(gitgraph.graph) do
-        if row.commit and row.commit.j then
-            local line = vim.api.nvim_buf_get_lines(buf, row_idx - 1, row_idx, false)[1]
-            if line and line ~= "" then
-                local short_hash = row.commit.hash:sub(1, 7)
-                local hash_start, hash_end = line:find(short_hash, 1, true)
+        if row.commit then
+            -- Find the exact column index (j) of the commit to match gitgraph's color assignment
+            local j_col = 1
+            if row.cells then
+                for j, cell in ipairs(row.cells) do
+                    if cell.is_commit or (cell.commit and cell.commit.hash == row.commit.hash and not cell.connector) then
+                        j_col = j
+                        break
+                    end
+                end
+            end
+
+            local lines = vim.api.nvim_buf_get_lines(buf, row_idx - 1, row_idx, false)
+            if lines and lines[1] and lines[1] ~= "" then
+                local line = lines[1]
+                local hash_start, hash_end = line:find(row.commit.hash, 1, true)
                 if hash_start and hash_end then
-                    local hl_group = "GitGraphBranch" .. tostring(row.commit.j % branch_color_count + 1)
-                    vim.api.nvim_buf_set_extmark(buf, gitgraph_hash_ns, row_idx - 1, hash_start - 1, {
+                    local hl_group = "GitGraphBranch" .. tostring(j_col % branch_color_count + 1)
+                    pcall(vim.api.nvim_buf_set_extmark, buf, gitgraph_hash_ns, row_idx - 1, hash_start - 1, {
                         end_col = hash_end,
                         hl_group = hl_group,
-                        hl_mode = "replace",
-                        priority = 1000,
+                        hl_mode = "combine",
+                        priority = 10000,
                     })
+                    applied = true
                 end
             end
         end
     end
+    return applied
 end
 
 function M.find_git_tab()
@@ -317,9 +331,21 @@ function M.draw_gitgraph()
     vim.api.nvim_set_current_win(gitgraph_win)
     require("gitgraph").draw({}, { all = true, max_count = 5000 })
     local gitgraph_bufnr = vim.api.nvim_win_get_buf(gitgraph_win)
-    vim.defer_fn(function()
-        apply_gitgraph_hash_colors(gitgraph_bufnr)
-    end, 120)
+
+    local function apply_colors_with_retry(retries)
+        if retries <= 0 then return end
+        vim.defer_fn(function()
+            if apply_gitgraph_hash_colors(gitgraph_bufnr) then
+                -- Try one more time to ensure it overrides any late gitgraph highlights
+                if retries > 2 then
+                    apply_colors_with_retry(2)
+                end
+            else
+                apply_colors_with_retry(retries - 1)
+            end
+        end, 100)
+    end
+    apply_colors_with_retry(5)
 
     -- Remove leftover placeholder windows so the Git tab stays |fugitive|gitgraph|.
     local final_wins = vim.api.nvim_tabpage_list_wins(current_tab)
