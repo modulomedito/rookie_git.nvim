@@ -1,5 +1,4 @@
 local M = {}
-local gitgraph_hash_ns = vim.api.nvim_create_namespace("RkGitGraphHashColor")
 
 local function is_fugitive_buffer(buf)
     local ft = vim.bo[buf].filetype
@@ -40,37 +39,6 @@ local function refresh_fugitive_status(win)
             pcall(vim.cmd, "silent edit")
         end
     end)
-end
-
-local function apply_gitgraph_hash_colors(buf)
-    if not buf or not vim.api.nvim_buf_is_valid(buf) then
-        return
-    end
-
-    local ok, gitgraph = pcall(require, "gitgraph")
-    if not ok or type(gitgraph.graph) ~= "table" then
-        return
-    end
-
-    vim.api.nvim_buf_clear_namespace(buf, gitgraph_hash_ns, 0, -1)
-
-    local branch_color_count = 5
-    for row_idx, row in ipairs(gitgraph.graph) do
-        if row.commit and row.commit.j then
-            local line = vim.api.nvim_buf_get_lines(buf, row_idx - 1, row_idx, false)[1]
-            if line and line ~= "" then
-                local hash_start, hash_end = line:find(row.commit.hash, 1, true)
-                if hash_start and hash_end then
-                    local hl_group = "GitGraphBranch" .. tostring(row.commit.j % branch_color_count + 1)
-                    vim.api.nvim_buf_set_extmark(buf, gitgraph_hash_ns, row_idx - 1, hash_start - 1, {
-                        end_col = hash_end,
-                        hl_group = hl_group,
-                        priority = 250,
-                    })
-                end
-            end
-        end
-    end
 end
 
 function M.find_git_tab()
@@ -314,10 +282,6 @@ function M.draw_gitgraph()
     -- 4. Draw
     vim.api.nvim_set_current_win(gitgraph_win)
     require("gitgraph").draw({}, { all = true, max_count = 5000 })
-    local gitgraph_bufnr = vim.api.nvim_win_get_buf(gitgraph_win)
-    vim.defer_fn(function()
-        apply_gitgraph_hash_colors(gitgraph_bufnr)
-    end, 60)
 
     -- Remove leftover placeholder windows so the Git tab stays |fugitive|gitgraph|.
     local final_wins = vim.api.nvim_tabpage_list_wins(current_tab)
