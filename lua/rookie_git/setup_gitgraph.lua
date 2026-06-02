@@ -57,7 +57,9 @@ function M.find_git_tab()
 end
 
 function M.open_gitgraph(layout)
-    gitgraph_layout = normalize_gitgraph_layout(layout)
+    if layout ~= nil then
+        gitgraph_layout = normalize_gitgraph_layout(layout)
+    end
 
     -- 1. Cleanup redundant buffers first
     local fugitive_buf = -1
