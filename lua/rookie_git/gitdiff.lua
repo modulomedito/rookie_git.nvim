@@ -98,10 +98,6 @@ function M.setup()
             desc = "Jump to the next differing column in diff windows",
         }
     )
-
-    vim.keymap.set("n", "<leader>jd", M.jump_to_next_change, {
-        desc = "Jump to the next differing column in diff windows",
-    })
 end
 
 return M
