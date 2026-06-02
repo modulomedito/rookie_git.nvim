@@ -9,7 +9,7 @@ function M.setup()
         require("rookie_git.gitdiff").jump_to_next_change()
     end, "Jump to the next differing column in diff windows")
 
-    set("n", "<leader><C-k>", function()
+    set("n", "<leader><C-w>", function()
         require("rookie_git.setup_fugitive").close_diff_buffers()
     end, "Fugitive: Close diff buffers")
 
