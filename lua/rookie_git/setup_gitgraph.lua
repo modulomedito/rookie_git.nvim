@@ -1,4 +1,12 @@
 local M = {}
+local gitgraph_layout = "v"
+
+local function normalize_gitgraph_layout(layout)
+    if layout == "s" then
+        return "s"
+    end
+    return "v"
+end
 
 local function is_fugitive_buffer(buf)
     if not buf or not vim.api.nvim_buf_is_valid(buf) then return false end
@@ -48,7 +56,9 @@ function M.find_git_tab()
     return -1
 end
 
-function M.open_gitgraph()
+function M.open_gitgraph(layout)
+    gitgraph_layout = normalize_gitgraph_layout(layout)
+
     -- 1. Cleanup redundant buffers first
     local fugitive_buf = -1
     local gitgraph_buf = -1
@@ -91,7 +101,7 @@ function M.open_gitgraph()
                 elseif not timed_out then
                     vim.notify("Git fetch failed", vim.log.levels.WARN)
                 end
-                M.draw_gitgraph()
+                M.draw_gitgraph(gitgraph_layout)
             end)
         end,
     })
@@ -127,7 +137,10 @@ function M.async_git(args, success_msg)
     })
 end
 
-function M.draw_gitgraph()
+function M.draw_gitgraph(layout)
+    layout = normalize_gitgraph_layout(layout or gitgraph_layout)
+    gitgraph_layout = layout
+
     -- 0. Ensure we are in the Git tab
     local target_tab = M.find_git_tab()
     if target_tab ~= -1 then
@@ -211,15 +224,22 @@ function M.draw_gitgraph()
     -- 2. Open/Focus Fugitive
     if fugitive_win ~= -1 then
         vim.api.nvim_set_current_win(fugitive_win)
-        -- Ensure fugitive is on the left
-        vim.cmd("wincmd H")
+        if layout == "v" then
+            vim.cmd("wincmd H")
+        else
+            vim.cmd("wincmd J")
+        end
     else
         if fugitive_buf ~= -1 then
             -- Buffer exists but no window in this tab
             if is_fresh_tab then
                 fugitive_win = original_win
             else
-                vim.cmd("leftabove vsplit")
+                if layout == "v" then
+                    vim.cmd("leftabove vsplit")
+                else
+                    vim.cmd("rightbelow split")
+                end
                 fugitive_win = vim.api.nvim_get_current_win()
             end
             vim.api.nvim_win_set_buf(fugitive_win, fugitive_buf)
@@ -248,14 +268,17 @@ function M.draw_gitgraph()
                 original_cursor = { 1, 0 }
             end
         end
-        -- Ensure fugitive is on the left
         vim.api.nvim_set_current_win(fugitive_win)
-        vim.cmd("wincmd H")
+        if layout == "v" then
+            vim.cmd("wincmd H")
+        else
+            vim.cmd("wincmd J")
+        end
     end
 
     refresh_fugitive_status(fugitive_win)
 
-    -- 3. Recreate GitGraph as a direct right split of fugitive so no window sits between them.
+    -- 3. Recreate GitGraph as a direct split of fugitive so no window sits between them.
     if gitgraph_win ~= -1 and vim.api.nvim_win_is_valid(gitgraph_win) then
         if original_win == gitgraph_win then
             original_win = -1
@@ -265,7 +288,11 @@ function M.draw_gitgraph()
     end
 
     vim.api.nvim_set_current_win(fugitive_win)
-    vim.cmd("rightbelow vsplit")
+    if layout == "v" then
+        vim.cmd("rightbelow vsplit")
+    else
+        vim.cmd("leftabove split")
+    end
     gitgraph_win = vim.api.nvim_get_current_win()
     if gitgraph_buf ~= -1 then
         vim.api.nvim_win_set_buf(gitgraph_win, gitgraph_buf)
@@ -292,11 +319,19 @@ function M.draw_gitgraph()
 
     if vim.api.nvim_win_is_valid(fugitive_win) then
         vim.api.nvim_set_current_win(fugitive_win)
-        vim.cmd("wincmd H")
+        if layout == "v" then
+            vim.cmd("wincmd H")
+        else
+            vim.cmd("wincmd J")
+        end
     end
     if vim.api.nvim_win_is_valid(gitgraph_win) then
         vim.api.nvim_set_current_win(gitgraph_win)
-        vim.cmd("wincmd L")
+        if layout == "v" then
+            vim.cmd("wincmd L")
+        else
+            vim.cmd("wincmd K")
+        end
     end
 
     -- 5. Restore original window focus and cursor position
@@ -364,8 +399,12 @@ function M.setup()
     end, { desc = "Rookie GitGraph - Draw" })
 
     vim.api.nvim_create_user_command("Gg", function()
-        M.open_gitgraph()
-    end, { desc = "Rookie GitGraph - Draw" })
+        M.open_gitgraph("s")
+    end, { desc = "Rookie GitGraph - Draw (vertical)" })
+
+    vim.api.nvim_create_user_command("Ggv", function()
+        M.open_gitgraph("v")
+    end, { desc = "Rookie GitGraph - Draw (stacked)" })
 
     vim.api.nvim_create_user_command("RkGit", function(opts)
         if #opts.fargs == 0 then
