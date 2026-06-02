@@ -12,14 +12,6 @@ local function is_gitgraph_buffer(buf)
     return ft == "gitgraph" or name:match("GitGraph$")
 end
 
-local function is_empty_placeholder_buffer(buf)
-    return vim.bo[buf].buftype == ""
-        and vim.api.nvim_buf_get_name(buf) == ""
-        and not vim.bo[buf].modified
-        and vim.api.nvim_buf_line_count(buf) <= 1
-        and vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] == ""
-end
-
 local function refresh_fugitive_status(win)
     if win == -1 or not vim.api.nvim_win_is_valid(win) then
         return
@@ -289,7 +281,7 @@ function M.draw_gitgraph()
     local final_wins = vim.api.nvim_tabpage_list_wins(current_tab)
     for _, win in ipairs(final_wins) do
         local buf = vim.api.nvim_win_get_buf(win)
-        if not is_fugitive_buffer(buf) and not is_gitgraph_buffer(buf) and is_empty_placeholder_buffer(buf) then
+        if not is_fugitive_buffer(buf) and not is_gitgraph_buffer(buf) then
             if win == original_win then
                 original_win = fugitive_win
                 original_cursor = { 1, 0 }
