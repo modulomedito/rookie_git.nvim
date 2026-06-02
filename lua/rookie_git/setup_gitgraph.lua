@@ -1,15 +1,16 @@
 local M = {}
 
 local function is_fugitive_buffer(buf)
+    if not buf or not vim.api.nvim_buf_is_valid(buf) then return false end
     local ft = vim.bo[buf].filetype
     local name = vim.api.nvim_buf_get_name(buf)
-    return ft == "fugitive" or name:match("^fugitive://") or name:match("Fugitive$")
+    return ft == "fugitive" or name:match("^fugitive://")
 end
 
 local function is_gitgraph_buffer(buf)
+    if not buf or not vim.api.nvim_buf_is_valid(buf) then return false end
     local ft = vim.bo[buf].filetype
-    local name = vim.api.nvim_buf_get_name(buf)
-    return ft == "gitgraph" or name:match("GitGraph$")
+    return ft == "gitgraph"
 end
 
 local function refresh_fugitive_status(win)
@@ -277,16 +278,15 @@ function M.draw_gitgraph()
     vim.api.nvim_set_current_win(gitgraph_win)
     require("gitgraph").draw({}, { all = true, max_count = 5000 })
 
-    -- Remove leftover placeholder windows so the Git tab stays |fugitive|gitgraph|.
+    -- Remove leftover windows so the Git tab stays |fugitive|gitgraph|.
     local final_wins = vim.api.nvim_tabpage_list_wins(current_tab)
     for _, win in ipairs(final_wins) do
-        local buf = vim.api.nvim_win_get_buf(win)
-        if not is_fugitive_buffer(buf) and not is_gitgraph_buffer(buf) then
+        if win ~= fugitive_win and win ~= gitgraph_win then
             if win == original_win then
                 original_win = fugitive_win
                 original_cursor = { 1, 0 }
             end
-            pcall(vim.api.nvim_win_close, win, false)
+            pcall(vim.api.nvim_win_close, win, true)
         end
     end
 
