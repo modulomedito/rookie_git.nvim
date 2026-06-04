@@ -1,11 +1,117 @@
 local M = {}
 local gitgraph_layout = "v"
+local commit_message_float = {
+    buf = nil,
+    win = nil,
+}
 
 local function normalize_gitgraph_layout(layout)
     if layout == "s" then
         return "s"
     end
     return "v"
+end
+
+local function close_commit_message_float()
+    if commit_message_float.win and vim.api.nvim_win_is_valid(commit_message_float.win) then
+        pcall(vim.api.nvim_win_close, commit_message_float.win, true)
+    end
+    commit_message_float.win = nil
+    commit_message_float.buf = nil
+end
+
+local function get_commit_message_lines(commit)
+    local git_cmd = require("gitgraph").config.git_cmd or "git"
+    local cmd = git_cmd .. " show -s --format=%B " .. vim.fn.shellescape(commit.hash)
+    local lines = vim.fn.systemlist(cmd)
+
+    if vim.v.shell_error ~= 0 then
+        vim.notify("Failed to load commit message for " .. commit.hash, vim.log.levels.WARN)
+        return nil
+    end
+
+    if #lines == 0 then
+        return { "(empty commit message)" }
+    end
+
+    return lines
+end
+
+local function open_commit_message_float(commit)
+    local lines = get_commit_message_lines(commit)
+    if not lines then
+        return
+    end
+
+    close_commit_message_float()
+
+    local max_line_width = 0
+    for _, line in ipairs(lines) do
+        max_line_width = math.max(max_line_width, vim.fn.strdisplaywidth(line))
+    end
+
+    local width = math.min(math.max(max_line_width + 2, 40), math.max(math.floor(vim.o.columns * 0.8), 40))
+    local height = math.min(math.max(#lines, 1), math.max(math.floor(vim.o.lines * 0.7), 8))
+    local row = math.max(math.floor((vim.o.lines - height) / 2) - 1, 1)
+    local col = math.max(math.floor((vim.o.columns - width) / 2), 0)
+
+    local buf = vim.api.nvim_create_buf(false, true)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+    vim.bo[buf].bufhidden = "wipe"
+    vim.bo[buf].filetype = "gitcommit"
+    vim.bo[buf].modifiable = false
+    vim.bo[buf].readonly = true
+
+    local win = vim.api.nvim_open_win(buf, true, {
+        relative = "editor",
+        style = "minimal",
+        border = "rounded",
+        title = " Commit " .. commit.hash .. " ",
+        title_pos = "center",
+        width = width,
+        height = height,
+        row = row,
+        col = col,
+    })
+
+    vim.wo[win].wrap = true
+    vim.wo[win].linebreak = true
+    vim.wo[win].number = false
+    vim.wo[win].relativenumber = false
+    vim.wo[win].signcolumn = "no"
+    vim.wo[win].cursorline = false
+
+    local close_keys = { "q", "<Esc>", "<Tab>" }
+    for _, lhs in ipairs(close_keys) do
+        vim.keymap.set("n", lhs, close_commit_message_float, {
+            buffer = buf,
+            silent = true,
+            nowait = true,
+        })
+    end
+
+    commit_message_float.buf = buf
+    commit_message_float.win = win
+end
+
+local function map_gitgraph_commit_message(buf)
+    vim.keymap.set("n", "<Tab>", function()
+        local draw = require("gitgraph.draw")
+        local utils = require("gitgraph.utils")
+        local row = vim.api.nvim_win_get_cursor(0)[1]
+        local commit = utils.get_commit_from_row(draw.graph, row)
+
+        if not commit then
+            vim.notify("No commit under cursor", vim.log.levels.INFO)
+            return
+        end
+
+        open_commit_message_float(commit)
+    end, {
+        buffer = buf,
+        silent = true,
+        desc = "Show full commit message",
+    })
 end
 
 local function is_fugitive_buffer(buf)
@@ -306,6 +412,7 @@ function M.draw_gitgraph(layout)
     -- 4. Draw
     vim.api.nvim_set_current_win(gitgraph_win)
     require("gitgraph").draw({}, { all = true, max_count = 5000 })
+    map_gitgraph_commit_message(vim.api.nvim_win_get_buf(gitgraph_win))
 
     -- Remove leftover windows so the Git tab stays |fugitive|gitgraph|.
     local final_wins = vim.api.nvim_tabpage_list_wins(current_tab)
