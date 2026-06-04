@@ -214,14 +214,14 @@ function M.open_gitgraph(layout)
         end,
     })
 
-    -- 5s timeout
+    -- 10s timeout
     vim.defer_fn(function()
         if vim.fn.jobwait({ job_id }, 0)[1] == -1 then
             timed_out = true
             vim.fn.jobstop(job_id)
             vim.notify("Git fetch timed out, showing graph", vim.log.levels.INFO)
         end
-    end, 5000)
+    end, 10000)
 end
 
 function M.async_git(args, success_msg)
