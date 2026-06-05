@@ -1,8 +1,13 @@
 local M = {}
 local gitgraph_layout = "v"
+local FETCH_TIMEOUT_MS = 300
 local commit_message_float = {
     buf = nil,
     win = nil,
+}
+local command_queue_state = {
+    active_request_id = 0,
+    items = {},
 }
 
 local function normalize_gitgraph_layout(layout)
@@ -10,6 +15,78 @@ local function normalize_gitgraph_layout(layout)
         return "s"
     end
     return "v"
+end
+
+local function get_git_cmd_parts()
+    local git_cmd = require("gitgraph").config.git_cmd or "git"
+    return vim.split(git_cmd, "%s+", { trimempty = true })
+end
+
+local function clone_queue_items(items)
+    local cloned = {}
+    for index, item in ipairs(items) do
+        cloned[index] = {
+            label = item.label,
+            command = item.command,
+            status = item.status,
+        }
+    end
+    return cloned
+end
+
+local function render_command_queue(items)
+    local parts = {}
+    for _, item in ipairs(items) do
+        local label = item.label
+        if item.status == "running" then
+            label = "[" .. label .. "]"
+        end
+        table.insert(parts, label)
+    end
+    return table.concat(parts, " -> ")
+end
+
+local function sync_command_queue_state()
+    vim.g.rookie_git_command_queue = clone_queue_items(command_queue_state.items)
+    vim.g.rookie_git_command_queue_status = render_command_queue(command_queue_state.items)
+
+    local message = vim.g.rookie_git_command_queue_status
+    if message == "" then
+        message = " "
+    end
+
+    pcall(vim.api.nvim_echo, { { message, "ModeMsg" } }, false, {})
+end
+
+local function is_active_command_request(request_id)
+    return command_queue_state.active_request_id == request_id
+end
+
+local function set_command_queue(request_id, items)
+    if not is_active_command_request(request_id) then
+        return
+    end
+    command_queue_state.items = items
+    sync_command_queue_state()
+end
+
+local function update_command_queue_item(request_id, label, status)
+    if not is_active_command_request(request_id) then
+        return
+    end
+
+    for _, item in ipairs(command_queue_state.items) do
+        if item.label == label then
+            item.status = status
+            break
+        end
+    end
+
+    sync_command_queue_state()
+end
+
+local function clear_command_queue(request_id)
+    set_command_queue(request_id, {})
 end
 
 local function close_commit_message_float()
@@ -148,6 +225,48 @@ local function refresh_fugitive_status(win)
     end)
 end
 
+local function cleanup_redundant_git_buffers()
+    local fugitive_buf = -1
+    local gitgraph_buf = -1
+
+    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+        if vim.api.nvim_buf_is_valid(buf) then
+            if is_fugitive_buffer(buf) then
+                if fugitive_buf == -1 then
+                    fugitive_buf = buf
+                else
+                    pcall(vim.api.nvim_buf_delete, buf, { force = true })
+                end
+            elseif is_gitgraph_buffer(buf) then
+                if gitgraph_buf == -1 then
+                    gitgraph_buf = buf
+                else
+                    pcall(vim.api.nvim_buf_delete, buf, { force = true })
+                end
+            end
+        end
+    end
+end
+
+local function ensure_git_tab()
+    local target_tab = M.find_git_tab()
+    if target_tab ~= -1 then
+        vim.api.nvim_set_current_tabpage(target_tab)
+    else
+        vim.cmd("tabnew")
+    end
+end
+
+local function prepare_gitgraph_workspace()
+    cleanup_redundant_git_buffers()
+    ensure_git_tab()
+end
+
+local function run_gitgraph_draw(layout)
+    prepare_gitgraph_workspace()
+    M.draw_gitgraph(layout)
+end
+
 function M.find_git_tab()
     for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
         local wins = vim.api.nvim_tabpage_list_wins(tab)
@@ -167,61 +286,92 @@ function M.open_gitgraph(layout)
         gitgraph_layout = normalize_gitgraph_layout(layout)
     end
 
-    -- 1. Cleanup redundant buffers first
-    local fugitive_buf = -1
-    local gitgraph_buf = -1
-    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-        if vim.api.nvim_buf_is_valid(buf) then
-            if is_fugitive_buffer(buf) then
-                if fugitive_buf == -1 then
-                    fugitive_buf = buf
-                else
-                    pcall(vim.api.nvim_buf_delete, buf, { force = true })
-                end
-            elseif is_gitgraph_buffer(buf) then
-                if gitgraph_buf == -1 then
-                    gitgraph_buf = buf
-                else
-                    pcall(vim.api.nvim_buf_delete, buf, { force = true })
-                end
-            end
-        end
-    end
+    command_queue_state.active_request_id = command_queue_state.active_request_id + 1
+    local request_id = command_queue_state.active_request_id
+    local fetch_timed_out = false
+    local draw_started = false
 
-    -- 2. Check if a tab with gitgraph/fugitive already exists
-    local target_tab = M.find_git_tab()
-
-    -- 3. Switch to existing tab or create a new one
-    if target_tab ~= -1 then
-        vim.api.nvim_set_current_tabpage(target_tab)
-    else
-        vim.cmd("tabnew")
-    end
-
-    -- 4. Proceed with drawing
-    local timed_out = false
+    clear_command_queue(request_id)
     vim.notify("Git fetching...", vim.log.levels.INFO)
-    local job_id = vim.fn.jobstart({ "git", "fetch" }, {
+
+    local function start_draw_from_queue()
+        if not is_active_command_request(request_id) or draw_started then
+            return
+        end
+
+        draw_started = true
+        if fetch_timed_out then
+            update_command_queue_item(request_id, "Draw", "running")
+        end
+
+        local ok, err = pcall(run_gitgraph_draw, gitgraph_layout)
+        if not ok then
+            vim.notify("Gitgraph draw failed: " .. tostring(err), vim.log.levels.ERROR)
+        end
+
+        clear_command_queue(request_id)
+    end
+
+    local function handle_fetch_exit(exit_code)
+        if not is_active_command_request(request_id) then
+            return
+        end
+
+        if exit_code == 0 then
+            vim.notify("Git fetch completed", vim.log.levels.INFO)
+        else
+            vim.notify("Git fetch failed", vim.log.levels.WARN)
+        end
+
+        if fetch_timed_out then
+            update_command_queue_item(request_id, "Fetch", "done")
+        end
+
+        start_draw_from_queue()
+    end
+
+    local job_id = vim.fn.jobstart(vim.list_extend(get_git_cmd_parts(), { "fetch" }), {
         on_exit = function(_, exit_code)
             vim.schedule(function()
-                if exit_code == 0 then
-                    vim.notify("Git fetch completed", vim.log.levels.INFO)
-                elseif not timed_out then
-                    vim.notify("Git fetch failed", vim.log.levels.WARN)
-                end
-                M.draw_gitgraph(gitgraph_layout)
+                handle_fetch_exit(exit_code)
             end)
         end,
     })
 
-    -- 10s timeout
-    vim.defer_fn(function()
-        if vim.fn.jobwait({ job_id }, 0)[1] == -1 then
-            timed_out = true
-            vim.fn.jobstop(job_id)
-            vim.notify("Git fetch timed out, showing graph", vim.log.levels.INFO)
+    if job_id <= 0 then
+        vim.notify("Failed to start git fetch", vim.log.levels.ERROR)
+        local ok, err = pcall(run_gitgraph_draw, gitgraph_layout)
+        if not ok then
+            vim.notify("Gitgraph draw failed: " .. tostring(err), vim.log.levels.ERROR)
         end
-    end, 10000)
+        return
+    end
+
+    vim.defer_fn(function()
+        if not is_active_command_request(request_id) or draw_started then
+            return
+        end
+
+        if vim.fn.jobwait({ job_id }, 0)[1] == -1 then
+            fetch_timed_out = true
+            set_command_queue(request_id, {
+                {
+                    label = "Fetch",
+                    command = table.concat(vim.list_extend(get_git_cmd_parts(), { "fetch" }), " "),
+                    status = "running",
+                },
+                {
+                    label = "Draw",
+                    command = "RkGitGraph",
+                    status = "pending",
+                },
+            })
+            vim.notify(
+                "Git fetch exceeded " .. FETCH_TIMEOUT_MS .. "ms and continues in background",
+                vim.log.levels.INFO
+            )
+        end
+    end, FETCH_TIMEOUT_MS)
 end
 
 function M.async_git(args, success_msg)
