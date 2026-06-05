@@ -89,6 +89,17 @@ local function clear_command_queue(request_id)
     set_command_queue(request_id, {})
 end
 
+local function notify_command_queue(request_id, level)
+    if not is_active_command_request(request_id) then
+        return
+    end
+
+    local message = render_command_queue(command_queue_state.items)
+    if message ~= "" then
+        vim.notify(message, level or vim.log.levels.INFO)
+    end
+end
+
 local function close_commit_message_float()
     if commit_message_float.win and vim.api.nvim_win_is_valid(commit_message_float.win) then
         pcall(vim.api.nvim_win_close, commit_message_float.win, true)
@@ -288,21 +299,45 @@ function M.open_gitgraph(layout)
 
     command_queue_state.active_request_id = command_queue_state.active_request_id + 1
     local request_id = command_queue_state.active_request_id
-    local fetch_timed_out = false
-    local draw_started = false
+    local draw_update_started = false
+    local timeout_draw_started = false
+    local fetch_command = vim.list_extend(get_git_cmd_parts(), { "fetch" })
 
-    clear_command_queue(request_id)
-    vim.notify("Git fetching...", vim.log.levels.INFO)
+    set_command_queue(request_id, {
+        {
+            label = "Fetch",
+            command = table.concat(fetch_command, " "),
+            status = "running",
+        },
+        {
+            label = "Draw",
+            command = "RkGitGraph",
+            status = "pending",
+        },
+    })
+    notify_command_queue(request_id)
 
-    local function start_draw_from_queue()
-        if not is_active_command_request(request_id) or draw_started then
+    local function run_timeout_draw()
+        if not is_active_command_request(request_id) or timeout_draw_started then
             return
         end
 
-        draw_started = true
-        if fetch_timed_out then
-            update_command_queue_item(request_id, "Draw", "running")
+        timeout_draw_started = true
+        local ok, err = pcall(run_gitgraph_draw, gitgraph_layout)
+        if not ok then
+            vim.notify("Gitgraph draw failed: " .. tostring(err), vim.log.levels.ERROR)
         end
+    end
+
+    local function start_draw_update()
+        if not is_active_command_request(request_id) or draw_update_started then
+            return
+        end
+
+        draw_update_started = true
+        update_command_queue_item(request_id, "Fetch", "done")
+        update_command_queue_item(request_id, "Draw", "running")
+        notify_command_queue(request_id)
 
         local ok, err = pcall(run_gitgraph_draw, gitgraph_layout)
         if not ok then
@@ -318,19 +353,14 @@ function M.open_gitgraph(layout)
         end
 
         if exit_code == 0 then
-            vim.notify("Git fetch completed", vim.log.levels.INFO)
+            start_draw_update()
         else
             vim.notify("Git fetch failed", vim.log.levels.WARN)
+            start_draw_update()
         end
-
-        if fetch_timed_out then
-            update_command_queue_item(request_id, "Fetch", "done")
-        end
-
-        start_draw_from_queue()
     end
 
-    local job_id = vim.fn.jobstart(vim.list_extend(get_git_cmd_parts(), { "fetch" }), {
+    local job_id = vim.fn.jobstart(fetch_command, {
         on_exit = function(_, exit_code)
             vim.schedule(function()
                 handle_fetch_exit(exit_code)
@@ -339,6 +369,7 @@ function M.open_gitgraph(layout)
     })
 
     if job_id <= 0 then
+        clear_command_queue(request_id)
         vim.notify("Failed to start git fetch", vim.log.levels.ERROR)
         local ok, err = pcall(run_gitgraph_draw, gitgraph_layout)
         if not ok then
@@ -348,28 +379,17 @@ function M.open_gitgraph(layout)
     end
 
     vim.defer_fn(function()
-        if not is_active_command_request(request_id) or draw_started then
+        if not is_active_command_request(request_id) or draw_update_started then
             return
         end
 
         if vim.fn.jobwait({ job_id }, 0)[1] == -1 then
-            fetch_timed_out = true
-            set_command_queue(request_id, {
-                {
-                    label = "Fetch",
-                    command = table.concat(vim.list_extend(get_git_cmd_parts(), { "fetch" }), " "),
-                    status = "running",
-                },
-                {
-                    label = "Draw",
-                    command = "RkGitGraph",
-                    status = "pending",
-                },
-            })
+            notify_command_queue(request_id)
             vim.notify(
                 "Git fetch exceeded " .. FETCH_TIMEOUT_MS .. "ms and continues in background",
                 vim.log.levels.INFO
             )
+            run_timeout_draw()
         end
     end, FETCH_TIMEOUT_MS)
 end
