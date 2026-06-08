@@ -1,6 +1,7 @@
 local M = {}
 
 local modules = {
+    "rookie_git.autocmd",
     "rookie_git.gitdiff",
     "rookie_git.setup_diffview",
     "rookie_git.setup_fugitive",

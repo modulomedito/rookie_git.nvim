@@ -18,24 +18,21 @@ function M.setup()
     ]])
 
     -- Command abbreviations
-    -- cabbrev Gg call timer_start(200, {-> execute('RkGitGraph')})\|G
     vim.cmd([[
-        cabbrev Gc silent G checkout <C-r><C-w>\|RkGitGraph
-        cabbrev Gcherry G cherry-pick <C-r><C-w>\|RkGitGraph
+        cabbrev Gc silent G checkout <C-r><C-w>
+        cabbrev Gcherry G cherry-pick <C-r><C-w>
         cabbrev Gclr G clean -d -f
-        cabbrev Gdell silent G branch -d\|RkGitGraph<Left><Left><Left><Left><Left><Left><Left><Left><Left><Left><Left>
+        cabbrev Gdell silent G branch -d
         cabbrev Gdelr RkGit push origin --delete
         cabbrev Gf RkGit fetch
-        cabbrev Gm silent G merge --ff <C-r><C-w>\|RkGitGraph
-        cabbrev Gnew silent G checkout -b\|RkGitGraph<Left><Left><Left><Left><Left><Left><Left><Left><Left><Left><Left>
+        cabbrev Gm silent G merge --ff <C-r><C-w>
+        cabbrev Gnew silent G checkout -b
         cabbrev Gpl RkGit pull
         cabbrev Gps RkGit push
-        cabbrev Gr G rebase <C-r><C-w>\|RkGitGraph<Left><Left><Left><Left><Left><Left><Left><Left><Left><Left><Left>
-        cabbrev Gstashpo silent G stash pop\|RkGitGraph
-        cabbrev Gstashpu silent G stash push --include-untracked\|RkGitGraph
-        cabbrev Gtag silent G tag\|RkGitGraph<Left><Left><Left><Left><Left><Left><Left><Left><Left><Left><Left>
-
-        cabbrev Gl RkGitlabIssue
+        cabbrev Gr G rebase <C-r><C-w>
+        cabbrev Gstashpo silent G stash pop
+        cabbrev Gstashpu silent G stash push --include-untracked
+        cabbrev Gtag silent G tag
     ]])
 end
 
