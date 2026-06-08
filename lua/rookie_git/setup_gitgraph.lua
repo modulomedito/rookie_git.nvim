@@ -9,6 +9,7 @@ local command_queue_state = {
     active_request_id = 0,
     items = {},
 }
+local pending_gitgraph_update = false
 
 local function normalize_gitgraph_layout(layout)
     if layout == "s" then
@@ -329,14 +330,16 @@ function M.open_gitgraph(layout)
 
         draw_update_started = true
         update_command_queue_item(request_id, "Fetch", "done")
-        update_command_queue_item(request_id, "Draw", "running")
-
-        local ok, err = pcall(run_gitgraph_draw, gitgraph_layout)
-        if not ok then
-            vim.notify("Gitgraph draw failed: " .. tostring(err), vim.log.levels.ERROR)
-        end
-
+        update_command_queue_item(request_id, "Draw", "pending")
         clear_command_queue(request_id)
+
+        -- If user is already viewing a gitgraph buffer, update immediately
+        local current_buf = vim.api.nvim_get_current_buf()
+        if vim.api.nvim_buf_is_valid(current_buf) and vim.bo[current_buf].filetype == "gitgraph" then
+            pcall(require("gitgraph").draw, {}, { all = true, max_count = 5000 })
+        else
+            pending_gitgraph_update = true
+        end
     end
 
     local function handle_fetch_exit(exit_code)
@@ -344,12 +347,10 @@ function M.open_gitgraph(layout)
             return
         end
 
-        if exit_code == 0 then
-            start_draw_update()
-        else
+        if exit_code ~= 0 then
             vim.notify("Git fetch failed", vim.log.levels.WARN)
-            start_draw_update()
         end
+        start_draw_update()
     end
 
     local job_id = vim.fn.jobstart(fetch_command, {
@@ -653,6 +654,17 @@ function M.setup()
     vim.api.nvim_create_user_command("Ggv", function()
         M.open_gitgraph("v")
     end, { desc = "Rookie GitGraph - Draw (stacked)" })
+
+    -- Redraw gitgraph when user switches back to it after a background fetch
+    vim.api.nvim_create_autocmd("BufEnter", {
+        pattern = "*",
+        callback = function()
+            if pending_gitgraph_update and vim.bo.filetype == "gitgraph" then
+                pending_gitgraph_update = false
+                pcall(require("gitgraph").draw, {}, { all = true, max_count = 5000 })
+            end
+        end,
+    })
 end
 
 return M
