@@ -380,27 +380,6 @@ function M.open_gitgraph(layout)
     end, FETCH_TIMEOUT_MS)
 end
 
-function M.async_git(args, success_msg)
-    local cmd_str = table.concat(args, " ")
-    vim.notify("Git " .. cmd_str .. "...", vim.log.levels.INFO)
-    vim.fn.jobstart(vim.list_extend({ "git" }, args), {
-        on_exit = function(_, exit_code)
-            vim.schedule(function()
-                if exit_code == 0 then
-                    if success_msg then
-                        vim.notify(success_msg, vim.log.levels.INFO)
-                    else
-                        vim.notify("Git " .. cmd_str .. " completed", vim.log.levels.INFO)
-                    end
-                    M.draw_gitgraph()
-                else
-                    vim.notify("Git " .. cmd_str .. " failed", vim.log.levels.WARN)
-                end
-            end)
-        end,
-    })
-end
-
 function M.draw_gitgraph(layout)
     layout = normalize_gitgraph_layout(layout or gitgraph_layout)
     gitgraph_layout = layout
@@ -676,7 +655,9 @@ function M.setup()
             vim.notify("Usage: RkGit <git command>", vim.log.levels.ERROR)
             return
         end
-        M.async_git(opts.fargs)
+        local cmd_str = table.concat(opts.fargs, " ")
+        vim.notify("Git " .. cmd_str .. "...", vim.log.levels.INFO)
+        vim.fn.jobstart(vim.list_extend({ "git" }, opts.fargs))
     end, { nargs = "*", complete = "shellcmd" })
 
 end
