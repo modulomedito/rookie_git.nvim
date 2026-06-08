@@ -322,8 +322,27 @@ function M.open_gitgraph(layout)
         local current_tab = vim.api.nvim_get_current_tabpage()
 
         if git_tab ~= -1 and current_tab == git_tab then
-            -- Step 4: Cursor is still in the git tab — redraw now
-            pcall(require("gitgraph").draw, {}, { all = true, max_count = 5000 })
+            -- Step 4: Cursor is still in the git tab — find the gitgraph
+            -- window and draw into it, so we don't accidentally overwrite
+            -- the fugitive buffer if the cursor is sitting there.
+            local target_win = -1
+            for _, win in ipairs(vim.api.nvim_tabpage_list_wins(current_tab)) do
+                local buf = vim.api.nvim_win_get_buf(win)
+                if is_gitgraph_buffer(buf) then
+                    target_win = win
+                    break
+                end
+            end
+            if target_win ~= -1 then
+                local saved_win = vim.api.nvim_get_current_win()
+                vim.api.nvim_set_current_win(target_win)
+                pcall(require("gitgraph").draw, {}, { all = true, max_count = 5000 })
+                if saved_win ~= target_win and vim.api.nvim_win_is_valid(saved_win) then
+                    vim.api.nvim_set_current_win(saved_win)
+                end
+            else
+                pending_gitgraph_update = true
+            end
         else
             -- Step 5: Cursor is elsewhere — defer, do NOT focus the git tab
             pending_gitgraph_update = true
