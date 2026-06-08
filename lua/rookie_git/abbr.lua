@@ -1,4 +1,5 @@
 local M = {}
+local setup_gitgraph = require("rookie_git.setup_gitgraph")
 
 local function async_git(args, success_msg)
     local cmd_str = table.concat(args, " ")
@@ -12,6 +13,8 @@ local function async_git(args, success_msg)
                     else
                         vim.notify("Git " .. cmd_str .. " completed", vim.log.levels.INFO)
                     end
+                    -- Update gitgraph if cursor is still in the git tab
+                    setup_gitgraph.try_update_gitgraph()
                 else
                     vim.notify("Git " .. cmd_str .. " failed", vim.log.levels.WARN)
                 end
