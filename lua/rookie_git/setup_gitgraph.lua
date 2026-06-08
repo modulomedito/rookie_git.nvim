@@ -127,7 +127,8 @@ local function open_commit_message_float(commit)
         max_line_width = math.max(max_line_width, vim.fn.strdisplaywidth(line))
     end
 
-    local width = math.min(math.max(max_line_width + 2, 40), math.max(math.floor(vim.o.columns * 0.8), 40))
+    local width =
+        math.min(math.max(max_line_width + 2, 40), math.max(math.floor(vim.o.columns * 0.8), 40))
     local height = math.min(math.max(#lines, 1), math.max(math.floor(vim.o.lines * 0.7), 8))
     local row = math.max(math.floor((vim.o.lines - height) / 2) - 1, 1)
     local col = math.max(math.floor((vim.o.columns - width) / 2), 0)
@@ -192,14 +193,18 @@ local function map_gitgraph_commit_message(buf)
 end
 
 local function is_fugitive_buffer(buf)
-    if not buf or not vim.api.nvim_buf_is_valid(buf) then return false end
+    if not buf or not vim.api.nvim_buf_is_valid(buf) then
+        return false
+    end
     local ft = vim.bo[buf].filetype
     local name = vim.api.nvim_buf_get_name(buf)
     return ft == "fugitive" or name:match("^fugitive://")
 end
 
 local function is_gitgraph_buffer(buf)
-    if not buf or not vim.api.nvim_buf_is_valid(buf) then return false end
+    if not buf or not vim.api.nvim_buf_is_valid(buf) then
+        return false
+    end
     local ft = vim.bo[buf].filetype
     return ft == "gitgraph"
 end
@@ -593,8 +598,7 @@ function M.setup()
     end
 
     -- Apply Tokyonight colors if available
-    local has_tokyonight, tokyonight_colors =
-        pcall(require, "tokyonight.colors")
+    local has_tokyonight, tokyonight_colors = pcall(require, "tokyonight.colors")
     if has_tokyonight then
         local colors = tokyonight_colors.setup()
         local highlights = {
@@ -649,17 +653,6 @@ function M.setup()
     vim.api.nvim_create_user_command("Ggv", function()
         M.open_gitgraph("v")
     end, { desc = "Rookie GitGraph - Draw (stacked)" })
-
-    vim.api.nvim_create_user_command("RkGit", function(opts)
-        if #opts.fargs == 0 then
-            vim.notify("Usage: RkGit <git command>", vim.log.levels.ERROR)
-            return
-        end
-        local cmd_str = table.concat(opts.fargs, " ")
-        vim.notify("Git " .. cmd_str .. "...", vim.log.levels.INFO)
-        vim.fn.jobstart(vim.list_extend({ "git" }, opts.fargs))
-    end, { nargs = "*", complete = "shellcmd" })
-
 end
 
 return M

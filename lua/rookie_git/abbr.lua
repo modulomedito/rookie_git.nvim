@@ -23,12 +23,12 @@ function M.setup()
         cabbrev Gcherry G cherry-pick <C-r><C-w>
         cabbrev Gclr G clean -d -f
         cabbrev Gdell silent G branch -d
-        cabbrev Gdelr RkGit push origin --delete
-        cabbrev Gf RkGit fetch
+        cabbrev Gdelr G push origin --delete
+        cabbrev Gf G fetch
         cabbrev Gm silent G merge --ff <C-r><C-w>
         cabbrev Gnew silent G checkout -b
-        cabbrev Gpl RkGit pull
-        cabbrev Gps RkGit push
+        cabbrev Gpl G pull
+        cabbrev Gps G push
         cabbrev Gr G rebase <C-r><C-w>
         cabbrev Gstashpo silent G stash pop
         cabbrev Gstashpu silent G stash push --include-untracked
