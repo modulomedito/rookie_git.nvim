@@ -294,53 +294,18 @@ function M.open_gitgraph(layout)
 
     command_queue_state.active_request_id = command_queue_state.active_request_id + 1
     local request_id = command_queue_state.active_request_id
-    local draw_update_started = false
-    local timeout_draw_started = false
+
+    -- Step 1: Create a tab for showing the graph
+    prepare_gitgraph_workspace()
+
+    -- Step 2: Draw the graph first (synchronous, instant feedback)
+    local ok, err = pcall(M.draw_gitgraph, gitgraph_layout)
+    if not ok then
+        vim.notify("Gitgraph draw failed: " .. tostring(err), vim.log.levels.ERROR)
+    end
+
+    -- Step 3: Try fetch asynchronously in the background
     local fetch_command = vim.list_extend(get_git_cmd_parts(), { "fetch" })
-
-    set_command_queue(request_id, {
-        {
-            label = "Fetch",
-            command = table.concat(fetch_command, " "),
-            status = "running",
-        },
-        {
-            label = "Draw",
-            command = "RkGitGraph",
-            status = "pending",
-        },
-    })
-
-    local function run_timeout_draw()
-        if not is_active_command_request(request_id) or timeout_draw_started then
-            return
-        end
-
-        timeout_draw_started = true
-        local ok, err = pcall(run_gitgraph_draw, gitgraph_layout)
-        if not ok then
-            vim.notify("Gitgraph draw failed: " .. tostring(err), vim.log.levels.ERROR)
-        end
-    end
-
-    local function start_draw_update()
-        if not is_active_command_request(request_id) or draw_update_started then
-            return
-        end
-
-        draw_update_started = true
-        update_command_queue_item(request_id, "Fetch", "done")
-        update_command_queue_item(request_id, "Draw", "pending")
-        clear_command_queue(request_id)
-
-        -- If user is already viewing a gitgraph buffer, update immediately
-        local current_buf = vim.api.nvim_get_current_buf()
-        if vim.api.nvim_buf_is_valid(current_buf) and vim.bo[current_buf].filetype == "gitgraph" then
-            pcall(require("gitgraph").draw, {}, { all = true, max_count = 5000 })
-        else
-            pending_gitgraph_update = true
-        end
-    end
 
     local function handle_fetch_exit(exit_code)
         if not is_active_command_request(request_id) then
@@ -350,7 +315,19 @@ function M.open_gitgraph(layout)
         if exit_code ~= 0 then
             vim.notify("Git fetch failed", vim.log.levels.WARN)
         end
-        start_draw_update()
+
+        -- Step 4 & 5: If the cursor is still in the git tab, update immediately.
+        -- Otherwise, defer the update until the cursor re-enters the tab.
+        local git_tab = M.find_git_tab()
+        local current_tab = vim.api.nvim_get_current_tabpage()
+
+        if git_tab ~= -1 and current_tab == git_tab then
+            -- Step 4: Cursor is still in the git tab — redraw now
+            pcall(require("gitgraph").draw, {}, { all = true, max_count = 5000 })
+        else
+            -- Step 5: Cursor is elsewhere — defer, do NOT focus the git tab
+            pending_gitgraph_update = true
+        end
     end
 
     local job_id = vim.fn.jobstart(fetch_command, {
@@ -362,28 +339,8 @@ function M.open_gitgraph(layout)
     })
 
     if job_id <= 0 then
-        clear_command_queue(request_id)
-        vim.notify("Failed to start git fetch", vim.log.levels.ERROR)
-        local ok, err = pcall(run_gitgraph_draw, gitgraph_layout)
-        if not ok then
-            vim.notify("Gitgraph draw failed: " .. tostring(err), vim.log.levels.ERROR)
-        end
-        return
+        vim.notify("Failed to start git fetch", vim.log.levels.WARN)
     end
-
-    vim.defer_fn(function()
-        if not is_active_command_request(request_id) or draw_update_started then
-            return
-        end
-
-        if vim.fn.jobwait({ job_id }, 0)[1] == -1 then
-            vim.notify(
-                "Git fetch exceeded " .. FETCH_TIMEOUT_MS .. "ms and continues in background",
-                vim.log.levels.INFO
-            )
-            run_timeout_draw()
-        end
-    end, FETCH_TIMEOUT_MS)
 end
 
 function M.draw_gitgraph(layout)
