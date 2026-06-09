@@ -287,6 +287,14 @@ function M.find_git_tab()
     return -1
 end
 
+function M.try_update_fugitive()
+    for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+        for _, win in ipairs(vim.api.nvim_tabpage_list_wins(tab)) do
+            refresh_fugitive_status(win)
+        end
+    end
+end
+
 function M.try_update_gitgraph()
     local git_tab = M.find_git_tab()
     local current_tab = vim.api.nvim_get_current_tabpage()

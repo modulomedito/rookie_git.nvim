@@ -13,8 +13,9 @@ local function async_git(args, success_msg)
                     else
                         vim.notify("Git " .. cmd_str .. " completed", vim.log.levels.INFO)
                     end
-                    -- Update gitgraph if cursor is still in the git tab
+                    -- Update gitgraph and fugitive buffers
                     setup_gitgraph.try_update_gitgraph()
+                    setup_gitgraph.try_update_fugitive()
                 else
                     vim.notify("Git " .. cmd_str .. " failed", vim.log.levels.WARN)
                 end
