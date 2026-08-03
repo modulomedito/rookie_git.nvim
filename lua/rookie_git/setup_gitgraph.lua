@@ -210,6 +210,16 @@ local function is_gitgraph_buffer(buf)
     return ft == "gitgraph"
 end
 
+local function draw_graph()
+    require("gitgraph").draw({}, { all = true, max_count = 5000 })
+    -- Plugin redraws mark the buffer modified; the graph is read-only, so
+    -- clear it or :q asks to save the GitGraph buffer.
+    local buf = vim.api.nvim_get_current_buf()
+    if is_gitgraph_buffer(buf) then
+        vim.bo[buf].modified = false
+    end
+end
+
 local function refresh_fugitive_status(win)
     if win == -1 or not vim.api.nvim_win_is_valid(win) then
         return
@@ -313,7 +323,7 @@ function M.try_update_gitgraph()
         if target_win ~= -1 then
             local saved_win = vim.api.nvim_get_current_win()
             vim.api.nvim_set_current_win(target_win)
-            pcall(require("gitgraph").draw, {}, { all = true, max_count = 5000 })
+            pcall(draw_graph)
             if saved_win ~= target_win and vim.api.nvim_win_is_valid(saved_win) then
                 vim.api.nvim_set_current_win(saved_win)
             end
@@ -539,7 +549,7 @@ function M.draw_gitgraph(layout)
 
     -- 4. Draw
     vim.api.nvim_set_current_win(gitgraph_win)
-    require("gitgraph").draw({}, { all = true, max_count = 5000 })
+    draw_graph()
     map_gitgraph_commit_message(vim.api.nvim_win_get_buf(gitgraph_win))
 
     -- Remove leftover windows so the Git tab stays |fugitive|gitgraph|.
@@ -648,7 +658,7 @@ function M.setup()
         callback = function()
             if pending_gitgraph_update and vim.bo.filetype == "gitgraph" then
                 pending_gitgraph_update = false
-                pcall(require("gitgraph").draw, {}, { all = true, max_count = 5000 })
+                pcall(draw_graph)
             end
         end,
     })
