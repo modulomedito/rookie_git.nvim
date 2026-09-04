@@ -58,7 +58,8 @@ function M.setup()
         cabbrev Gdell RkGitAsync branch -d
         cabbrev Gdelr RkGitAsync push origin --delete
         cabbrev Gf RkGitAsync fetch
-        cabbrev Gm RkGitAsync merge --ff <C-r><C-w>
+        cabbrev Gmf RkGitAsync merge --ff <C-r><C-w>
+        cabbrev Gmn RkGitAsync merge --no-ff <C-r><C-w>
         cabbrev Gnew RkGitAsync checkout -b
         cabbrev Gpl RkGitAsync pull
         cabbrev Gps RkGitAsync push

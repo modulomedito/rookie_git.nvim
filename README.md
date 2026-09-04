@@ -10,7 +10,7 @@ Features
 - gitsigns integration with convenient hunk mappings (e.g. `<leader>hs`, `<leader>hu`, `<leader>hp`).
 - Jump to next differing column in a diff split (`<leader>jd` / command `:RkGitdiffJumpToNextChange`).
 
-Requirements
+## Requirements
 
 - Neovim (0.7+ recommended).
 - Optional plugins that enhance full functionality:
@@ -41,6 +41,26 @@ require("lazy").setup({
     end,
   },
 })
+```
+
+## Abbreviation Keymaps
+
+```
+cabbrev Gc RkGitAsync checkout <C-r><C-w>
+cabbrev Gcherry RkGitAsync cherry-pick <C-r><C-w>
+cabbrev Gclr RkGitAsync clean -d -f
+cabbrev Gdell RkGitAsync branch -d
+cabbrev Gdelr RkGitAsync push origin --delete
+cabbrev Gf RkGitAsync fetch
+cabbrev Gmf RkGitAsync merge --ff <C-r><C-w>
+cabbrev Gmn RkGitAsync merge --no-ff <C-r><C-w>
+cabbrev Gnew RkGitAsync checkout -b
+cabbrev Gpl RkGitAsync pull
+cabbrev Gps RkGitAsync push
+cabbrev Gr RkGitAsync rebase <C-r><C-w>
+cabbrev Gstashpo RkGitAsync stash pop
+cabbrev Gstashpu RkGitAsync stash push --include-untracked
+cabbrev Gtag RkGitAsync tag
 ```
 
 Usage
