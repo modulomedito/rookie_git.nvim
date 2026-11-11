@@ -28,17 +28,17 @@ function M.setup()
     -- Insert abbreviations
     vim.cmd([[
         iabbrev xbar <C-R>=repeat('-',80)<CR><Esc>0
-        iabbrev xbui 🔧 build():[#]<Left><Left><Left><Left>
-        iabbrev xcho 🐳 chore():[#]<Left><Left><Left><Left>
-        iabbrev xdoc 📃 docs():[#]<Left><Left><Left><Left>
-        iabbrev xfea ✨ feat():[#]<Left><Left><Left><Left>
-        iabbrev xfix 🐞 fix():[#]<Left><Left><Left><Left>
-        iabbrev xini 🎉 init():[#]<Left><Left><Left><Left>
-        iabbrev xper 🎈 perf():[#]<Left><Left><Left><Left>
-        iabbrev xref 🦄 refactor():[#]<Left><Left><Left><Left>
-        iabbrev xrev ↩ revert():[#]<Left><Left><Left><Left>
-        iabbrev xsty 🌈 style():[#]<Left><Left><Left><Left>
-        iabbrev xtes 🧪 test():[#]<Left><Left><Left><Left>
+        iabbrev xbui build():[#]<Left><Left><Left><Left>
+        iabbrev xcho chore():[#]<Left><Left><Left><Left>
+        iabbrev xdoc docs():[#]<Left><Left><Left><Left>
+        iabbrev xfea feat():[#]<Left><Left><Left><Left>
+        iabbrev xfix fix():[#]<Left><Left><Left><Left>
+        iabbrev xini init():[#]<Left><Left><Left><Left>
+        iabbrev xper perf():[#]<Left><Left><Left><Left>
+        iabbrev xref refactor():[#]<Left><Left><Left><Left>
+        iabbrev xrev evert():[#]<Left><Left><Left><Left>
+        iabbrev xsty style():[#]<Left><Left><Left><Left>
+        iabbrev xtes test():[#]<Left><Left><Left><Left>
     ]])
 
     -- Async git command
